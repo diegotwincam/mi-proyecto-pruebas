@@ -1,0 +1,80 @@
+name: Automation CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-unit-test:
+    name: 1. Build y Pruebas Unitarias
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Stage 1 - Build (Compilación)
+        run: mvn clean compile
+
+      - name: Stage 2 - Pruebas Unitarias
+        run: mvn test -Dtest=CalculatorUnitTest
+
+  integration-test:
+    name: 2. Pruebas de Integración
+    needs: build-and-unit-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Stage 3 - Pruebas de Integración
+        run: mvn test -Dtest=UserApiIT
+
+  deploy-and-acceptance-test:
+    name: 3. Despliegue en Staging y Pruebas de Aceptación
+    needs: integration-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Stage 4 - Simulación de Despliegue en Ambiente de Pruebas (Staging)
+        run: |
+          echo "Desplegando la aplicación en el ambiente de Staging..."
+          echo "Despliegue completado con éxito."
+
+      - name: Stage 5 - Pruebas de Aceptación (Acceptance Tests)
+        id: acceptance
+        run: mvn test -Dtest=SystemAcceptanceTest
+
+      - name: Stage 6 - Rollback Automático (Se ejecuta solo si fallan las pruebas)
+        if: failure() && steps.acceptance.outcome == 'failure'
+        run: |
+          echo "=========================================================="
+          echo "ALERTA: Las pruebas de aceptación han fallado."
+          echo "Ejecutando estrategia de ROLLBACK hacia la última versión estable..."
+          echo "Restaurando despliegue previo en Staging..."
+          echo "Rollback finalizado exitosamente."
+          echo "=========================================================="
